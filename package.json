@@ -11,15 +11,18 @@
     "watch": "tsc --watch"
   },
   "devDependencies": {
-    "shx": "^0.4.0",
     "@modelcontextprotocol/sdk": "^1.8.0",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^20.0.0",
     "openai": "^4.91.0",
-    "@types/node": "^20.0.0"
+    "shx": "^0.4.0"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
-    "faiss-node": "^0.5.1"
+    "better-sqlite3": "^11.1.2",
+    "faiss-node": "^0.5.1",
+    "sqlite-vec": "^0.1.7-alpha.2"
   }
 }
