@@ -17,6 +17,7 @@ class RAGManager {
   private llmApiKey: string;
   private embeddingModel: string;
   private vectorStorePath: string;
+  private chunkSize: number;
 
   constructor() {
     // Get environment variables
@@ -26,6 +27,7 @@ class RAGManager {
       process.env.EMBEDDING_MODEL ||
       "granite-embedding-278m-multilingual-Q6_K-1743674737397:latest";
     this.vectorStorePath = process.env.VECTOR_STORE_PATH || "./vector_store";
+    this.chunkSize = +(process.env.CHUNK_SIZE || 500);
 
     // Configure embedder based on the embedding model
     if (
@@ -112,10 +114,11 @@ class RAGManager {
           const content = readFileSync(filePath, "utf-8");
 
           // Split content into chunks (simple implementation - could be improved)
-          const chunks = this.chunkText(content, 1000, 200);
+          const chunks = this.chunkText(content, this.chunkSize, 200);
 
           chunks.forEach((chunk, index) => {
             docs.push({
+              path: filePath,
               content: chunk,
               metadata: {
                 source: `${file} (chunk ${index + 1}/${chunks.length})`,
@@ -143,10 +146,11 @@ class RAGManager {
         const content = readFileSync(docPath, "utf-8");
 
         // Split content into chunks
-        const chunks = this.chunkText(content, 1000, 200);
+        const chunks = this.chunkText(content, this.chunkSize, 200);
 
         chunks.forEach((chunk, index) => {
           docs.push({
+            path: docPath,
             content: chunk,
             metadata: {
               source: `${fileName} (chunk ${index + 1}/${chunks.length})`,
@@ -200,8 +204,8 @@ class RAGManager {
   // Simple text chunking function
   private chunkText(
     text: string,
-    chunkSize: number,
-    overlap: number
+    chunkSize: number = this.chunkSize,
+    overlap: number = 100
   ): string[] {
     const chunks: string[] = [];
     let i = 0;
@@ -257,88 +261,12 @@ class RAGManager {
 
     // Format the relevant chunks
     const contextText = results
-      .map((res: Document) => `From ${res.metadata.source}:\n${res.content}`)
+      .map((res: Document) => `- From ${res.metadata.source}:\n${res.content}`)
       .join("\n\n");
 
     // Generate answer using LLM
-    // const answer = await this.generateAnswer(query, contextText);
     return contextText;
   }
-
-  //   async generateAnswer(query: string, context: string): Promise<string> {
-  //     console.error("Generating answer using LLM...");
-
-  //     // Construct prompt with query and context
-  //     const prompt = `
-  // You are a helpful assistant that answers questions based on the provided context.
-
-  // Question: ${query}
-
-  // Context:
-  // ${context}
-
-  // Answer the question based on the context provided. If the answer cannot be found in the context, say "I don't have enough information to answer this question." and suggest what other information might be helpful.
-  // `;
-
-  //     try {
-  //       // Make API call to LLM
-  //       const response = await fetch(`${this.baseLlmApi}/chat/completions`, {
-  //         method: "POST",
-  //         headers: {
-  //           "Content-Type": "application/json",
-  //           ...(this.llmApiKey
-  //             ? { Authorization: `Bearer ${this.llmApiKey}` }
-  //             : {}),
-  //         },
-  //         body: JSON.stringify({
-  //           model: "gpt-3.5-turbo", // Default model, works with most OpenAI-compatible APIs
-  //           messages: [
-  //             {
-  //               role: "system",
-  //               content:
-  //                 "You are a helpful assistant that answers questions based on provided context.",
-  //             },
-  //             {
-  //               role: "user",
-  //               content: prompt,
-  //             },
-  //           ],
-  //           temperature: 0.3,
-  //           max_tokens: 1000,
-  //         }),
-  //       });
-
-  //       let responseText;
-  //       try {
-  //         if (!response.ok) {
-  //           responseText = await response.text();
-  //           throw new Error(
-  //             `LLM API error (${response.status}): ${responseText}`
-  //           );
-  //         }
-
-  //         const data = await response.json();
-  //         return data.choices[0].message.content;
-  //       } catch (parseError: unknown) {
-  //         console.error("Error parsing LLM response:", parseError);
-  //         if (responseText) {
-  //           throw new Error(
-  //             `Failed to parse LLM response: ${
-  //               parseError instanceof Error
-  //                 ? parseError.message
-  //                 : String(parseError)
-  //             }. Response was: ${responseText.substring(0, 100)}...`
-  //           );
-  //         }
-  //         throw parseError;
-  //       }
-  //     } catch (error) {
-  //       console.error("Error generating answer:", error);
-  //       return `Error generating answer: ${
-  //         error instanceof Error ? error.message : String(error)
-  //       }. Please check your API configuration and try again.`;
-  //     }
-  //   }
 }
 
 const ragManager = new RAGManager();

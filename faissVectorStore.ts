@@ -182,8 +182,8 @@ export class FaissVectorStore implements VectorStore {
           this.documents.push(item.doc);
         }
 
-        // Save to disk
-        await this.saveIndex();
+        // Debounce saving the index
+        this.debounceSaveIndex();
 
         console.error(
           `Successfully added ${
@@ -221,7 +221,6 @@ export class FaissVectorStore implements VectorStore {
     try {
       // Generate embedding for the query
       const rawEmbedding = await this.embedder(query);
-      console.log('Generated embedding:', rawEmbedding);
 
       // Normalize the embedding vector using helper
       const normalizedEmbedding = this.normalizeVector(rawEmbedding);
@@ -232,33 +231,42 @@ export class FaissVectorStore implements VectorStore {
       // Perform similarity search
       const results = this.index.search(normalizedEmbedding, resultLimit);
 
-      // Map results to documents
-      // faiss-node returns { neighbors: number[], distances: number[] }
-      const searchResult = results as unknown as {
-        neighbors: number[];
-        distances: number[];
-      };
-
-      // Check if neighbors array exists before trying to map it
-      if (!searchResult || !searchResult.neighbors || !Array.isArray(searchResult.neighbors)) {
-        console.error('Invalid search result structure:', searchResult);
+      // Validate search result structure
+      if (
+        !results ||
+        !results.labels ||
+        !Array.isArray(results.labels) ||
+        !results.distances ||
+        !Array.isArray(results.distances)
+      ) {
+        console.error("Invalid search result structure:", results);
         return [];
       }
 
+      // Optionally, create label-distance pairs if needed
+      const labelDistancePairs = results.labels.map(
+        (label: any, idx: number) => ({
+          label,
+          distance: results.distances[idx],
+        })
+      );
+
       // Filter out any undefined documents and ensure we only return valid results
-      return searchResult.neighbors
+      return results.labels
         .map((id: number) => this.documents[id])
         .filter((doc): doc is Document => doc !== undefined);
     } catch (error) {
-      console.error('Similarity search failed:', error);
+      console.error("Similarity search failed:", error);
       throw error;
     }
   }
 
   // Helper method to normalize a vector for cosine similarity
   private normalizeVector(vector: number[]): number[] {
-    const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
-    return vector.map(value => value / norm);
+    const norm = Math.sqrt(
+      vector.reduce((sum, value) => sum + value * value, 0)
+    );
+    return vector.map((value) => value / norm);
   }
 
   /**
@@ -283,9 +291,21 @@ export class FaissVectorStore implements VectorStore {
 
       console.error("Vectors and documents saved to disk");
     } catch (error) {
-      console.error("Error saving vector store to disk:", error);
-      throw error;
+      console.error("Failed to save index:", error);
     }
+  }
+
+  // Debounce mechanism for saveIndex to avoid frequent disk writes
+  private saveIndexTimeout: NodeJS.Timeout | null = null;
+
+  private debounceSaveIndex(delay: number = 500): void {
+    if (this.saveIndexTimeout) {
+      clearTimeout(this.saveIndexTimeout);
+    }
+    this.saveIndexTimeout = setTimeout(() => {
+      this.saveIndex();
+      this.saveIndexTimeout = null;
+    }, delay);
   }
 
   /**
@@ -293,5 +313,41 @@ export class FaissVectorStore implements VectorStore {
    */
   get size(): number {
     return this.documents.length;
+  }
+
+  /**
+   * Remove a document from the vector store
+   * @param docPath Path of the document to remove
+   */
+  async removeDocument(docPath: string): Promise<void> {
+    // Find the document in the internal array, using 'path' property
+    const doc = this.documents.find((d) => d.path === docPath);
+    if (!doc) {
+      // Document not found, no action needed
+      return;
+    }
+
+    // Remove the vector from the FAISS index
+    await this.index!.removeIds([(doc as any).vectorId]);
+
+    // Remove the document from the in-memory store
+    this.documents = this.documents.filter((d) => d.path !== docPath);
+
+    // Debounce saving the index
+    this.debounceSaveIndex();
+  }
+
+  /**
+   * Remove all documents from the vector store
+   */
+  async removeAllDocuments(): Promise<void> {
+    // Clear the FAISS index entirely
+    await (this.index as any).reset();
+
+    // Clear the in-memory documents list
+    this.documents = [];
+
+    // Debounce saving the index
+    this.debounceSaveIndex();
   }
 }
