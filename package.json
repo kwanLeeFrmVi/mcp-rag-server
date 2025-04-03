@@ -1,0 +1,25 @@
+{
+  "name": "mcp-rag-server",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "start": "node dist/index.js",
+    "prepare": "npm run build",
+    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "shx": "^0.4.0",
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "openai": "^4.91.0",
+    "@types/node": "^20.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "faiss-node": "^0.5.1"
+  }
+}
