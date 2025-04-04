@@ -211,7 +211,7 @@ class RAGManager {
     let i = 0;
 
     while (i < text.length) {
-      let chunk = text.slice(i, i + chunkSize);
+      const chunk = text.slice(i, i + chunkSize);
       chunks.push(chunk);
       i += chunkSize - overlap;
     }
@@ -527,7 +527,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           return {
             content: [
               {
-                type: "object",
+                type: "text",
                 text: "Successfully removed all documents from the index",
               },
             ],
