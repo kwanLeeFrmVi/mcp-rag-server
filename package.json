@@ -1,11 +1,11 @@
 {
   "name": "mcp-rag-server",
-  "version": "0.0.1",
+  "version": "0.0.4",
   "description": "MCP server for enabling RAG",
   "license": "MIT",
   "author": "Quan Le (Kwan96)",
-  "homepage": "https://github.com/kwanLeeFrmVi/mcp-server-memory",
-  "bugs": "https://github.com/kwanLeeFrmVi/mcp-server-memory/issues",
+  "homepage": "https://github.com/kwanLeeFrmVi/mcp-rag-server",
+  "bugs": "https://github.com/kwanLeeFrmVi/mcp-rag-server/issues",
   "type": "module",
   "bin": {
     "mcp-rag-server": "dist/index.js"

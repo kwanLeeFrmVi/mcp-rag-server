@@ -652,17 +652,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 async function main() {
   try {
-    // Set up process error handlers to prevent unhandled exceptions
-    process.on("uncaughtException", (err) => {
-      console.error("Uncaught exception:", err);
-      // Don't exit the process, just log the error
-    });
-
-    process.on("unhandledRejection", (reason) => {
-      console.error("Unhandled rejection:", reason);
-      // Don't exit the process, just log the error
-    });
-
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error("RAG MCP Server running on stdio");
