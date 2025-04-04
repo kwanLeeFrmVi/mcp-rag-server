@@ -8,10 +8,10 @@ import { readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 import fetch from "node-fetch";
 import type { Document } from "./types.js";
-import { FaissVectorStore } from "./faissVectorStore.js";
+import { LangChainVectorStore } from "./langchainVectorStore.js";
 
 class RAGManager {
-  private vectorStore: FaissVectorStore | null = null;
+  private vectorStore: LangChainVectorStore | null = null;
   private embedder: (text: string) => Promise<number[]>;
   private baseLlmApi: string;
   private llmApiKey: string;
@@ -88,7 +88,7 @@ class RAGManager {
 
     try {
       const stat = statSync(docPath);
-      console.info(
+      console.error(
         "🚀 ~ RAGManager ~ indexDocuments ~ stat:",
         stat.isDirectory(),
         stat.isFile()
@@ -189,12 +189,12 @@ class RAGManager {
         `Using embedding dimension: ${embeddingDimension} for model: ${this.embeddingModel}`
       );
 
-      this.vectorStore = new FaissVectorStore(
+      this.vectorStore = new LangChainVectorStore(
         this.embedder,
         this.vectorStorePath,
         embeddingDimension
       );
-      await (this.vectorStore as FaissVectorStore).initialize();
+      await (this.vectorStore as LangChainVectorStore).initialize();
     }
 
     await this.vectorStore.addDocuments(docs);
@@ -237,16 +237,22 @@ class RAGManager {
           `Using embedding dimension: ${embeddingDimension} for model: ${this.embeddingModel}`
         );
 
-        this.vectorStore = new FaissVectorStore(
+        this.vectorStore = new LangChainVectorStore(
           this.embedder,
           this.vectorStorePath,
           embeddingDimension
         );
-        await (this.vectorStore as FaissVectorStore).initialize();
+        await this.vectorStore.initialize();
 
-        // Check if the store has documents after initialization
-        if ((this.vectorStore as FaissVectorStore).size === 0) {
-          throw new Error("No documents found in vector store");
+        // Check if the vector store is empty by attempting a search
+        if (this.vectorStore) {
+          const testResults = await this.vectorStore.similaritySearch(
+            "test",
+            1
+          );
+          if (testResults.length === 0) {
+            throw new Error("No documents found in vector store");
+          }
         }
       } catch (error) {
         throw new Error(
@@ -256,6 +262,9 @@ class RAGManager {
     }
 
     console.error(`Searching for documents relevant to: "${query}"`);
+    if (!this.vectorStore) {
+      throw new Error("Vector store not initialized");
+    }
     const results = await this.vectorStore.similaritySearch(query, k);
     console.error(`Found ${results.length} relevant document chunks`);
 
@@ -266,6 +275,74 @@ class RAGManager {
 
     // Generate answer using LLM
     return contextText;
+  }
+
+  /**
+   * Remove a document from the vector store by path
+   * @param path Path to the document to remove
+   */
+  async removeDocument(path: string): Promise<void> {
+    if (!this.vectorStore) {
+      throw new Error("Vector store not initialized");
+    }
+
+    console.error(`Removing document: ${path}`);
+    await this.vectorStore.removeDocument(path);
+    console.error(`Document removed: ${path}`);
+  }
+
+  /**
+   * Remove all documents from the vector store
+   */
+  async removeAllDocuments(): Promise<void> {
+    if (!this.vectorStore) {
+      throw new Error("Vector store not initialized");
+    }
+
+    console.error("Removing all documents from the vector store");
+    await this.vectorStore.removeAllDocuments();
+    console.error("All documents removed");
+  }
+
+  /**
+   * List all document paths in the vector store
+   * @returns Array of document paths
+   */
+  async listDocumentPaths(): Promise<string[]> {
+    if (!this.vectorStore) {
+      // Try to initialize the vector store from disk
+      try {
+        // Determine embedding dimension based on model
+        let embeddingDimension = 1536; // Default for OpenAI models
+
+        if (
+          this.embeddingModel.includes("granite-embedding") ||
+          this.embeddingModel.includes("nomic-embed-text")
+        ) {
+          embeddingDimension = 768; // Granite and some Nomic models use 768 dimensions
+        }
+
+        console.error(
+          `Using embedding dimension: ${embeddingDimension} for model: ${this.embeddingModel}`
+        );
+
+        this.vectorStore = new LangChainVectorStore(
+          this.embedder,
+          this.vectorStorePath,
+          embeddingDimension
+        );
+        await this.vectorStore.initialize();
+      } catch (error) {
+        throw new Error(
+          "Documents not indexed yet. Please run index_documents first."
+        );
+      }
+    }
+
+    console.error("Listing all document paths in the vector store");
+    const paths = await this.vectorStore.listDocumentPaths();
+    console.error(`Found ${paths.length} documents in the vector store`);
+    return paths;
   }
 }
 
@@ -318,6 +395,43 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["query"],
         },
       },
+      {
+        name: "remove_document",
+        description: "Remove a specific document from the index by file path",
+        inputSchema: {
+          type: "object",
+          properties: {
+            path: {
+              type: "string",
+              description: "Path to the document to remove from the index",
+            },
+          },
+          required: ["path"],
+        },
+      },
+      {
+        name: "remove_all_documents",
+        description: "Remove all documents from the index",
+        inputSchema: {
+          type: "object",
+          properties: {
+            confirm: {
+              type: "boolean",
+              description:
+                "Confirmation to remove all documents (must be true)",
+            },
+          },
+          required: ["confirm"],
+        },
+      },
+      {
+        name: "list_documents",
+        description: "List all document paths in the index",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
     ],
   };
 });
@@ -326,7 +440,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   if (!args) {
-    throw new Error(`No arguments provided for tool: ${name}`);
+    console.error(`No arguments provided for tool: ${name}`);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error: No arguments provided for tool: ${name}`,
+        },
+      ],
+    };
   }
 
   try {
@@ -350,12 +472,124 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: "text",
-              text: result, // This is already the LLM-generated answer from generateAnswer
+              text: result,
             },
           ],
         };
+      case "remove_document":
+        if (!args.path) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Error: No document path provided",
+              },
+            ],
+          };
+        }
+
+        try {
+          await ragManager.removeDocument(args.path as string);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Successfully removed document: ${args.path}`,
+              },
+            ],
+          };
+        } catch (error) {
+          console.error(`Error removing document: ${error}`);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error removing document: ${error}`,
+              },
+            ],
+          };
+        }
+
+      case "remove_all_documents":
+        if (!args.confirm) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Error: You must set confirm=true to remove all documents",
+              },
+            ],
+          };
+        }
+
+        try {
+          await ragManager.removeAllDocuments();
+          return {
+            content: [
+              {
+                type: "object",
+                text: "Successfully removed all documents from the index",
+              },
+            ],
+          };
+        } catch (error) {
+          console.error(`Error removing all documents: ${error}`);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error removing all documents: ${error}`,
+              },
+            ],
+          };
+        }
+
+      case "list_documents":
+        try {
+          const paths = await ragManager.listDocumentPaths();
+
+          if (paths.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "No documents found in the index.",
+                },
+              ],
+            };
+          }
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Found ${paths.length} documents in the index:\n\n${paths
+                  .map((path) => `- ${path}`)
+                  .join("\n")}`,
+              },
+            ],
+          };
+        } catch (error) {
+          console.error(`Error listing documents: ${error}`);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error listing documents: ${error}`,
+              },
+            ],
+          };
+        }
       default:
-        throw new Error(`Unknown tool: ${name}`);
+        console.error(`Unknown tool: ${name}`);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: Unknown tool: ${name}`,
+            },
+          ],
+        };
     }
   } catch (error) {
     console.error(`Error handling tool ${name}:`, error);
@@ -374,13 +608,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 async function main() {
   try {
+    // Redirect all logging to stderr to avoid interfering with MCP JSON protocol
     console.error("Starting RAG MCP Server...");
-    console.error(`Using LLM API: ${process.env.BASE_LLM_API}`);
-    console.error(`Using embedding model: ${process.env.EMBEDDING_MODEL}`);
+    console.error(
+      `Using LLM API: ${
+        process.env.BASE_LLM_API || "http://localhost:11434/v1"
+      }`
+    );
+    console.error(
+      `Using embedding model: ${
+        process.env.EMBEDDING_MODEL ||
+        "granite-embedding-278m-multilingual-Q6_K-1743674737397:latest"
+      }`
+    );
+
+    // Set up process error handlers to prevent unhandled exceptions
+    process.on("uncaughtException", (err) => {
+      console.error("Uncaught exception:", err);
+      // Don't exit the process, just log the error
+    });
+
+    process.on("unhandledRejection", (reason) => {
+      console.error("Unhandled rejection:", reason);
+      // Don't exit the process, just log the error
+    });
 
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.info("RAG MCP Server running on stdio");
+    console.error("RAG MCP Server running on stdio");
   } catch (error) {
     handleFatalError("Error during server initialization:", error);
   }
@@ -388,7 +643,10 @@ async function main() {
 
 // Helper function for handling fatal errors
 function handleFatalError(message: string, error: unknown): void {
-  console.error(message, error);
+  console.error(
+    message,
+    error instanceof Error ? error.message : String(error)
+  );
   process.exit(1);
 }
 

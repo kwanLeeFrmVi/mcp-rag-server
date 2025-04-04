@@ -6,6 +6,7 @@ export interface Document {
   content: string;
   metadata: {
     source: string;
+    score?: number;
   };
 }
 

@@ -11,18 +11,27 @@
     "watch": "tsc --watch"
   },
   "devDependencies": {
+    "@eslint/js": "^9.23.0",
     "@modelcontextprotocol/sdk": "^1.8.0",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.29.0",
+    "@typescript-eslint/parser": "^8.29.0",
+    "eslint": "^9.23.0",
     "openai": "^4.91.0",
-    "shx": "^0.4.0"
+    "shx": "^0.4.0",
+    "typescript-eslint": "^8.29.0"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
+    "@langchain/community": "^0.3.39",
+    "@langchain/openai": "^0.5.2",
+    "@libsql/client": "^0.14.0",
     "better-sqlite3": "^11.1.2",
     "faiss-node": "^0.5.1",
+    "langchain": "^0.3.20",
     "sqlite-vec": "^0.1.7-alpha.2"
   }
 }
