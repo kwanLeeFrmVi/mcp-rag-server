@@ -53,24 +53,6 @@ _Note: Passing environment variables via client configuration depends on the cli
 
 ## Installation Options
 
-### As Global Command
-
-```bash
-npm install -g mcp-rag-server
-```
-
-Then use in your MCP config (ensure environment variables are set):
-
-```json
-{
-  "mcpServers": {
-    "rag": {
-      "command": "mcp-rag-server"
-    }
-  }
-}
-```
-
 ### From Source
 
 1.  Clone this repository
