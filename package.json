@@ -1,8 +1,18 @@
 {
   "name": "mcp-rag-server",
-  "module": "index.ts",
+  "version": "0.0.1",
+  "description": "MCP server for enabling RAG",
+  "license": "MIT",
+  "author": "Quan Le (Kwan96)",
+  "homepage": "https://github.com/kwanLeeFrmVi/mcp-server-memory",
+  "bugs": "https://github.com/kwanLeeFrmVi/mcp-server-memory/issues",
   "type": "module",
-  "private": true,
+  "bin": {
+    "mcp-rag-server": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
     "start": "node dist/index.js",
@@ -31,5 +41,6 @@
     "@libsql/client": "^0.14.0",
     "better-sqlite3": "^11.1.2",
     "langchain": "^0.3.20"
-  }
+  },
+  "module": "index.ts"
 }

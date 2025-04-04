@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -365,7 +366,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "index_documents",
-        description: "Index documents from specified path for RAG",
+        description: "Add documents from specified path for RAG Indexing",
         inputSchema: {
           type: "object",
           properties: {
@@ -463,7 +464,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             },
           ],
         };
-      case "query_documents":
+      case "query_documents": {
         const result = await ragManager.queryDocuments(
           args.query as string,
           (args.k as number) || 15
@@ -476,6 +477,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             },
           ],
         };
+      }
       case "remove_document":
         if (!args.path) {
           return {
