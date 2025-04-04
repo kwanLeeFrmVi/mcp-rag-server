@@ -11,6 +11,11 @@ import fetch from "node-fetch";
 import type { Document } from "./types.js";
 import { LangChainVectorStore } from "./langchainVectorStore.js";
 
+/**
+ * Manages RAG (Retrieval-Augmented Generation) operations including document indexing,
+ * querying, and vector store management. Handles document chunking, embedding generation,
+ * and interaction with the vector store.
+ */
 class RAGManager {
   private vectorStore: LangChainVectorStore | null = null;
   private embedder: (text: string) => Promise<number[]>;
@@ -20,6 +25,15 @@ class RAGManager {
   private vectorStorePath: string;
   private chunkSize: number;
 
+  /**
+   * Creates a new RAGManager instance.
+   * Initializes configuration from environment variables:
+   * - BASE_LLM_API: Base URL for LLM API (default: "http://localhost:11434/v1")
+   * - LLM_API_KEY: API key for LLM service (default: "")
+   * - EMBEDDING_MODEL: Name of embedding model to use
+   * - VECTOR_STORE_PATH: Path to store vector index (default: "./vector_store")
+   * - CHUNK_SIZE: Size of text chunks in characters (default: 500)
+   */
   constructor() {
     // Get environment variables
     this.baseLlmApi = process.env.BASE_LLM_API || "http://localhost:11434/v1";
@@ -62,6 +76,12 @@ class RAGManager {
     }
   }
 
+  /**
+   * Fetches embeddings for the given text payload
+   * @param payload - Object containing text and model parameters
+   * @returns Promise resolving to embedding vector (array of numbers)
+   * @throws Error if API request fails
+   */
   private async fetchEmbedding(payload: object): Promise<number[]> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -82,6 +102,12 @@ class RAGManager {
     return data.data ? data.data[0].embedding : data.embedding;
   }
 
+  /**
+   * Indexes documents from the specified path into the vector store
+   * @param docPath - Path to file or directory containing documents to index
+   * @throws Error if path doesn't exist, is invalid, or contains no supported files
+   * Supported file types: .json, .jsonl, .txt, .md, .csv
+   */
   async indexDocuments(docPath: string): Promise<void> {
     console.error(`Indexing documents from ${docPath}...`);
 
@@ -202,7 +228,13 @@ class RAGManager {
     console.error("Indexing complete");
   }
 
-  // Simple text chunking function
+  /**
+   * Splits text into chunks with optional overlap
+   * @param text - Text to chunk
+   * @param chunkSize - Size of each chunk in characters (default: this.chunkSize)
+   * @param overlap - Number of overlapping characters between chunks (default: 100)
+   * @returns Array of text chunks
+   */
   private chunkText(
     text: string,
     chunkSize: number = this.chunkSize,
@@ -220,6 +252,13 @@ class RAGManager {
     return chunks;
   }
 
+  /**
+   * Queries the vector store for documents relevant to the query
+   * @param query - Search query
+   * @param k - Number of results to return (default: 15)
+   * @returns Formatted string containing relevant document chunks
+   * @throws Error if vector store not initialized or no documents indexed
+   */
   async queryDocuments(query: string, k = 15): Promise<string> {
     if (!this.vectorStore) {
       // Try to initialize the vector store from disk
@@ -280,7 +319,8 @@ class RAGManager {
 
   /**
    * Remove a document from the vector store by path
-   * @param path Path to the document to remove
+   * @param path - Path to the document to remove
+   * @throws Error if vector store not initialized
    */
   async removeDocument(path: string): Promise<void> {
     if (!this.vectorStore) {
@@ -294,6 +334,7 @@ class RAGManager {
 
   /**
    * Remove all documents from the vector store
+   * @throws Error if vector store not initialized
    */
   async removeAllDocuments(): Promise<void> {
     if (!this.vectorStore) {
@@ -308,6 +349,7 @@ class RAGManager {
   /**
    * List all document paths in the vector store
    * @returns Array of document paths
+   * @throws Error if vector store not initialized or no documents indexed
    */
   async listDocumentPaths(): Promise<string[]> {
     if (!this.vectorStore) {
@@ -610,20 +652,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 async function main() {
   try {
-    // Redirect all logging to stderr to avoid interfering with MCP JSON protocol
-    console.error("Starting RAG MCP Server...");
-    console.error(
-      `Using LLM API: ${
-        process.env.BASE_LLM_API || "http://localhost:11434/v1"
-      }`
-    );
-    console.error(
-      `Using embedding model: ${
-        process.env.EMBEDDING_MODEL ||
-        "granite-embedding-278m-multilingual-Q6_K-1743674737397:latest"
-      }`
-    );
-
     // Set up process error handlers to prevent unhandled exceptions
     process.on("uncaughtException", (err) => {
       console.error("Uncaught exception:", err);
@@ -643,7 +671,6 @@ async function main() {
   }
 }
 
-// Helper function for handling fatal errors
 function handleFatalError(message: string, error: unknown): void {
   console.error(
     message,
