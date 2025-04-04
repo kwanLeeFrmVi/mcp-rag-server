@@ -73,7 +73,10 @@ _Note: Passing environment variables via client configuration depends on the cli
 
 The server provides these MCP-accessible RAG operations:
 
-- `index_documents`: Index documents from a specified path (`.txt`, `.md`, `.json`, `.jsonl`, `.csv`).
+- `index_documents`: Index documents from either:
+  - A directory path (will process all supported files in the directory)
+  - A single file path
+    Supported file types: `.txt`, `.md`, `.json`, `.jsonl`, `.csv`
 - `query_documents`: Query indexed documents using RAG.
 - `remove_document`: Remove a specific document from the index by its path.
 - `remove_all_documents`: Remove all documents from the index (requires confirmation).
@@ -83,7 +86,10 @@ The server provides these MCP-accessible RAG operations:
 
 This MCP server implements Retrieval Augmented Generation (RAG) to answer questions based on your documents. Here's the process:
 
-1.  **Indexing:** Use `index_documents` to provide a path to a file or directory containing supported documents (`.txt`, `.md`, `.json`, `.jsonl`, `.csv`).
+1.  **Indexing:** Use `index_documents` to provide either:
+    - A path to a directory (will process all supported files in the directory)
+    - A path to a single file
+      Supported document types: `.txt`, `.md`, `.json`, `.jsonl`, `.csv`
 2.  **Chunking & Embedding:** The server reads the documents, splits them into manageable chunks (configurable via `CHUNK_SIZE`), and generates vector embeddings for each chunk using the specified `EMBEDDING_MODEL` via the `BASE_LLM_API`.
 3.  **Storing:** These embeddings and the corresponding text chunks are stored in a local vector database (location specified by `VECTOR_STORE_PATH`).
 4.  **Querying:** Use `query_documents` with your question. The server generates an embedding for the query.
