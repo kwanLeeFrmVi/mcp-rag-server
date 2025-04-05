@@ -3,15 +3,48 @@
 [![NPM Version](https://img.shields.io/npm/v/mcp-rag-server.svg)](https://www.npmjs.com/package/mcp-rag-server)
 [![License](https://img.shields.io/npm/l/mcp-rag-server.svg)](LICENSE)
 
-A Model Context Protocol server enabling Retrieval Augmented Generation (RAG) capabilities. This server allows Large Language Models to answer questions based on the content of your documents by indexing them and retrieving relevant information.
+mcp-rag-server is a Model Context Protocol (MCP) server that enables Retrieval Augmented Generation (RAG) capabilities. It empowers Large Language Models (LLMs) to answer questions based on your document content by indexing and retrieving relevant information efficiently.
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [MCP Server Usage](#mcp-server-usage)
+  - [Basic Configuration](#basic-configuration)
+  - [Advanced Configuration](#advanced-configuration)
+- [Installation](#installation)
+  - [From Source](#from-source)
+- [Available RAG Tools](#available-rag-tools)
+- [How RAG Works](#how-rag-works)
+- [Environment Variables](#environment-variables)
+  - [Default Environment Settings](#default-environment-settings)
+  - [Configuration Examples for Embedding Providers](#configuration-examples-for-embedding-providers)
+- [Integrating with Your Client and AI Agent](#integrating-with-your-client-and-ai-agent)
+  - [Example Chat Conversation](#example-chat-conversation)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## Overview
+
+mcp-rag-server allows you to seamlessly integrate RAG functionalities into your applications. It works by:
+
+- **Indexing:** Parsing documents and splitting them into manageable chunks.
+- **Embedding:** Generating vector embeddings for each text chunk.
+- **Querying:** Matching query embeddings with stored document chunks to retrieve context.
+
+This enables downstream LLMs (via MCP clients like Claude Desktop) to generate contextually relevant responses.
+
+---
 
 ## MCP Server Usage
 
-This package is designed to be used as an MCP server with clients like Claude Desktop. Here's how to configure it:
-
 ### Basic Configuration
 
-Add this to your MCP client configuration:
+Integrate the server with your MCP client by adding the following to your configuration:
 
 ```json
 {
@@ -24,11 +57,11 @@ Add this to your MCP client configuration:
 }
 ```
 
-_Note: Ensure the required environment variables are set in the environment where the MCP client runs this command._
+> **Note:** Ensure that the required environment variables are set in the environment where your MCP client runs the command.
 
 ### Advanced Configuration
 
-For custom settings:
+For custom settings, including environment variables:
 
 ```json
 {
@@ -36,65 +69,98 @@ For custom settings:
     "rag": {
       "command": "npx",
       "args": ["-y", "mcp-rag-server"],
-      // Example of passing environment variables if your client supports it
       "env": {
-        "BASE_LLM_API": "http://your-llm-api:11434/v1",
-        "LLM_API_KEY": "your_api_key",
-        "EMBEDDING_MODEL": "your_embedding_model:latest",
-        "VECTOR_STORE_PATH": "/path/to/your/vector_store",
-        "CHUNK_SIZE": "1000"
+        "BASE_LLM_API": "http://localhost:11434/v1",
+        "LLM_API_KEY": "",
+        "EMBEDDING_MODEL": "granite-embedding-278m-multilingual-Q6_K-1743674737397:latest",
+        "VECTOR_STORE_PATH": "/user-dir/vector_store_locate/",
+        "CHUNK_SIZE": "500"
       }
     }
   }
 }
 ```
 
-_Note: Passing environment variables via client configuration depends on the client's capabilities. Setting them in the system environment is generally recommended._
+> **Note:** Environment variable configuration via the client depends on its capabilities. System-level environment variables are generally recommended.
 
-## Installation Options
+---
+
+## Installation
 
 ### From Source
 
-1.  Clone this repository
-2.  Install dependencies:
-    ```bash
-    npm install
-    ```
-3.  Build:
-    ```bash
-    npm run build
-    ```
-4.  Run (ensure environment variables are set):
-    ```bash
-    npm start
-    ```
+1. **Clone the Repository:**
+
+   ```bash
+   git clone https://github.com/yourusername/mcp-rag-server.git
+   cd mcp-rag-server
+   ```
+
+2. **Install Dependencies:**
+
+   ```bash
+   npm install
+   ```
+
+3. **Build the Project:**
+
+   ```bash
+   npm run build
+   ```
+
+4. **Run the Server:**
+
+   Ensure your environment variables are set, then start the server:
+
+   ```bash
+   npm start
+   ```
+
+---
 
 ## Available RAG Tools
 
-The server provides these MCP-accessible RAG operations:
+The server provides the following operations accessible via MCP:
 
-- `index_documents`: Index documents from either:
-  - A directory path (will process all supported files in the directory)
-  - A single file path
-    Supported file types: `.txt`, `.md`, `.json`, `.jsonl`, `.csv`
-- `query_documents`: Query indexed documents using RAG.
-- `remove_document`: Remove a specific document from the index by its path.
-- `remove_all_documents`: Remove all documents from the index (requires confirmation).
-- `list_documents`: List all document paths currently in the index.
+- **index_documents:**  
+  Index documents from a directory or a single file.  
+  _Supported file types:_ `.txt`, `.md`, `.json`, `.jsonl`, `.csv`
+
+- **query_documents:**  
+  Retrieve context by querying the indexed documents using RAG.
+
+- **remove_document:**  
+  Delete a specific document from the index by its path.
+
+- **remove_all_documents:**  
+  Clear the entire document index (_confirmation required_).
+
+- **list_documents:**  
+  Display all indexed document paths.
+
+---
 
 ## How RAG Works
 
-This MCP server implements Retrieval Augmented Generation (RAG) to answer questions based on your documents. Here's the process:
+The RAG process in the server consists of the following steps:
 
-1.  **Indexing:** Use `index_documents` to provide either:
-    - A path to a directory (will process all supported files in the directory)
-    - A path to a single file
-      Supported document types: `.txt`, `.md`, `.json`, `.jsonl`, `.csv`
-2.  **Chunking & Embedding:** The server reads the documents, splits them into manageable chunks (configurable via `CHUNK_SIZE`), and generates vector embeddings for each chunk using the specified `EMBEDDING_MODEL` via the `BASE_LLM_API`.
-3.  **Storing:** These embeddings and the corresponding text chunks are stored in a local vector database (location specified by `VECTOR_STORE_PATH`).
-4.  **Querying:** Use `query_documents` with your question. The server generates an embedding for the query.
-5.  **Searching:** It searches the vector database for the `k` document chunks whose embeddings are most similar to the query embedding.
-6.  **Contextualization:** The retrieved chunks are formatted and returned as context. An external LLM (like the one used in your chat client) can then use this context along with the original query to generate a comprehensive answer.
+1. **Indexing:**  
+   The `index_documents` tool accepts a file or directory path to begin processing.
+
+2. **Chunking & Embedding:**  
+   The server splits documents into chunks (configurable via `CHUNK_SIZE`) and generates vector embeddings using the specified `EMBEDDING_MODEL` via the `BASE_LLM_API`.
+
+3. **Storing:**  
+   The embeddings and chunks are stored in a local vector database at the path specified by `VECTOR_STORE_PATH`.
+
+4. **Querying:**  
+   When `query_documents` is called, the server generates an embedding for your query.
+
+5. **Searching:**  
+   It retrieves the top `k` document chunks that match the query.
+
+6. **Contextualization:**  
+   The retrieved chunks are returned as context to your LLM, which then generates a final answer.
 
 ```mermaid
 flowchart LR
@@ -107,64 +173,158 @@ flowchart LR
     H --> I(Client/LLM Generates Final Answer)
 ```
 
+---
+
 ## Environment Variables
 
-To configure the server, you need to set the following environment variables in your system. They can also potentially be passed via the MCP client configuration if supported (see Advanced Configuration).
+The server relies on several environment variables. These can be set at the system level or passed via your MCP client configuration.
 
-- `BASE_LLM_API`: (Required) The base URL for the embedding API endpoint (compatible with OpenAI embeddings API format).
-- `LLM_API_KEY`: (Optional) Your API key if the embedding endpoint requires authentication.
-- `EMBEDDING_MODEL`: (Required) Specifies the embedding model name compatible with your `BASE_LLM_API`.
-- `VECTOR_STORE_PATH`: (Optional) The directory path where the vector store database will be saved.
-  - Default: `"./vector_store"`
-- `CHUNK_SIZE`: (Optional) The target size (in characters) for splitting documents into chunks during indexing.
-  - Default: `500`
+### Default Environment Settings
 
-These variables are crucial for connecting to the embedding service and managing the vector store.
+If not explicitly set, the following defaults from the code will be used:
+
+- **`BASE_LLM_API`** (Required)  
+  The base URL for the embedding API endpoint.  
+  **Default:** `http://localhost:11434/v1`
+
+- **`LLM_API_KEY`** (Optional)  
+  API key for the embedding service (if required).  
+  **Default:** `""` (empty string)
+
+- **`EMBEDDING_MODEL`** (Required)  
+  The embedding model to use with the API.  
+  **Default:** `granite-embedding-278m-multilingual-Q6_K-1743674737397:latest`
+
+- **`VECTOR_STORE_PATH`** (Optional)  
+  The directory path for storing the vector database.  
+  **Default:** `./vector_store`
+
+- **`CHUNK_SIZE`** (Optional)  
+  The target size (in characters) for splitting documents into chunks.  
+  **Default:** `500`
 
 ### Configuration Examples for Embedding Providers
 
-Here's how to set the key variables for common providers:
+#### 1. Ollama (Local)
 
-**1. Ollama (Local)**
+- **Setup:**
+  - Ensure Ollama is running and the desired model is pulled (e.g., `ollama pull nomic-embed-text`).
+- **Variables:**
+  ```bash
+  BASE_LLM_API=http://localhost:11434/v1
+  LLM_API_KEY=
+  EMBEDDING_MODEL=nomic-embed-text
+  ```
 
-- Ensure Ollama is running and the desired embedding model is pulled (e.g., `ollama pull nomic-embed-text`).
-- `BASE_LLM_API`: `http://localhost:11434/v1` (or your Ollama server address)
-- `LLM_API_KEY`: (Leave empty or unset)
-- `EMBEDDING_MODEL`: `nomic-embed-text` (or the specific model name you pulled, e.g., `mxbai-embed-large`)
+#### 2. LM Studio (Local)
 
-**2. LM Studio (Local)**
+- **Setup:**
+  - Start the LM Studio server and load an embedding model.
+- **Variables:**
+  ```bash
+  BASE_LLM_API=http://localhost:1234/v1
+  LLM_API_KEY=
+  EMBEDDING_MODEL=lm-studio-model
+  ```
 
-- Start the LM Studio local server and load an embedding model.
-- `BASE_LLM_API`: `http://localhost:1234/v1` (or the address shown in LM Studio Server logs)
-- `LLM_API_KEY`: (Leave empty or unset)
-- `EMBEDDING_MODEL`: The model identifier shown in LM Studio (this might vary, check the server logs or UI). Often, it might just need a placeholder like `lm-studio-model` if the server handles the loaded model automatically for the `/embeddings` endpoint, but verify with LM Studio documentation.
+#### 3. OpenAI API
 
-**3. OpenAI API**
+- **Setup:**
+  - Use your OpenAI credentials.
+- **Variables:**
+  ```bash
+  BASE_LLM_API=https://api.openai.com/v1
+  LLM_API_KEY=YOUR_OPENAI_API_KEY
+  EMBEDDING_MODEL=text-embedding-ada-002
+  ```
 
-- `BASE_LLM_API`: `https://api.openai.com/v1`
-- `LLM_API_KEY`: `YOUR_OPENAI_API_KEY` (Replace with your actual key)
-- `EMBEDDING_MODEL`: `text-embedding-3-small`, `text-embedding-3-large`, or `text-embedding-ada-002`
+#### 4. OpenRouter
 
-**4. OpenRouter**
+- **Setup:**
+  - Use your OpenRouter API key.
+- **Variables:**
+  ```bash
+  BASE_LLM_API=https://openrouter.ai/api/v1
+  LLM_API_KEY=YOUR_OPENROUTER_API_KEY
+  EMBEDDING_MODEL=openai/text-embedding-ada-002
+  ```
 
-- `BASE_LLM_API`: `https://openrouter.ai/api/v1`
-- `LLM_API_KEY`: `YOUR_OPENROUTER_API_KEY` (Replace with your actual key)
-- `EMBEDDING_MODEL`: The specific model identifier from OpenRouter, e.g., `openai/text-embedding-ada-002`, `jina-ai/jina-embeddings-v2-base-en`, etc. (Check their documentation for available embedding models).
+#### 5. Google Gemini (via OpenAI Compatibility Endpoint)
 
-**5. Google Gemini (via OpenAI Compatibility Endpoint)**
+- **Setup:**
+  - Follow Google’s instructions to enable the compatibility endpoint.
+- **Variables:**
+  ```bash
+  BASE_LLM_API=https://generativelanguage.googleapis.com/v1beta
+  LLM_API_KEY=YOUR_GEMINI_API_KEY
+  EMBEDDING_MODEL=embedding-001
+  ```
 
-- Follow Google's instructions to enable the OpenAI compatibility endpoint for your Gemini API key.
-- `BASE_LLM_API`: `https://generativelanguage.googleapis.com/v1beta` (Verify this endpoint in Google's documentation)
-- `LLM_API_KEY`: `YOUR_GEMINI_API_KEY` (Replace with your actual key)
-- `EMBEDDING_MODEL`: `embedding-001` (or the specific model name provided by Google for the compatibility endpoint, e.g., `models/embedding-001`)
+> **Important:** Always refer to your provider’s documentation for precise API endpoints, model names, and authentication requirements.
 
-**Important:** Always refer to the specific provider's documentation for the correct API endpoint, model names, and authentication requirements. The server assumes an OpenAI-compatible `/embeddings` endpoint.
+---
+
+## Integrating with Your Client and AI Agent
+
+After setting up the MCP server, integrate it with your client (or AI agent) so that it can leverage RAG operations seamlessly.
+
+### Configuring Your MCP Client
+
+Ensure your client configuration includes the RAG server as shown below:
+
+```json
+{
+  "mcpServers": {
+    "rag": {
+      "command": "npx",
+      "args": ["-y", "mcp-rag-server"],
+      "env": {
+        "BASE_LLM_API": "http://localhost:11434/v1",
+        "LLM_API_KEY": "",
+        "EMBEDDING_MODEL": "granite-embedding-278m-multilingual-Q6_K-1743674737397:latest",
+        "VECTOR_STORE_PATH": "./vector_store",
+        "CHUNK_SIZE": "500"
+      }
+    }
+  }
+}
+```
+
+### Example Chat Conversation
+
+Below is an example conversation that demonstrates how an AI agent might instruct the MCP server to index documents and query the indexed documents:
+
+**User:**  
+Hey, can you add my documents for indexing? I have them stored in `/data/docs`.
+
+**AI Agent:**  
+Sure, let me index the documents from `/data/docs` now.
+
+_([Tool Call]: The agent issues an "index_documents" command with the path `/data/docs`.)_
+
+**AI Agent (after processing):**  
+The documents have been successfully indexed.
+
+---
+
+**User:**  
+Great! Now, could you help me find out what the main topics are in our latest report?
+
+**AI Agent:**  
+Okay, I'll query the indexed documents to retrieve context related to your report.
+
+_([Tool Call]: The agent issues a "query_documents" command with the query "What are the main topics in our latest report?")_
+
+**AI Agent (after processing):**  
+I found some relevant context from your documents. Based on the retrieved information, the main topics include market trends, customer feedback, and upcoming product features.
+
+---
 
 ## Development
 
 ### Prerequisites
 
-- Node.js (Check `package.json` for version requirements)
+- Node.js (see `package.json` for version requirements)
 - npm
 
 ### Building
@@ -175,16 +335,23 @@ npm run build
 
 ### Testing
 
-(Add testing instructions if/when tests are implemented)
+_To be implemented:_
 
 ```bash
 # npm test
 ```
 
+---
+
 ## Contributing
 
-Pull requests are welcome. For major changes, please open an issue first to discuss proposed changes.
+Contributions are welcome! If you wish to propose changes or add features, please:
+
+- Open an issue for discussion before submitting a pull request.
+- Follow the code style and commit guidelines provided in the repository.
+
+---
 
 ## License
 
-[MIT](LICENSE)
+This project is licensed under the [MIT License](LICENSE).
