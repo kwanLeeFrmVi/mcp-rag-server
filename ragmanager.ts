@@ -101,17 +101,10 @@ class RAGManager {
    * Supported file types: .json, .jsonl, .txt, .md, .csv
    */
   async indexDocuments(docPath: string): Promise<void> {
-    console.error(`Indexing documents from ${docPath}...`);
-
     const docs: Document[] = [];
 
     try {
       const stat = statSync(docPath);
-      console.error(
-        "🚀 ~ RAGManager ~ indexDocuments ~ stat:",
-        stat.isDirectory(),
-        stat.isFile()
-      );
 
       if (stat.isDirectory()) {
         // Handle directory path
@@ -190,8 +183,6 @@ class RAGManager {
       throw error;
     }
 
-    console.error(`Created ${docs.length} document chunks for indexing`);
-
     // Use FAISS vector store for persistent storage
     if (!this.vectorStore) {
       // Determine embedding dimension based on model
@@ -204,10 +195,6 @@ class RAGManager {
         embeddingDimension = 768; // Granite and some Nomic models use 768 dimensions
       }
 
-      console.error(
-        `Using embedding dimension: ${embeddingDimension} for model: ${this.embeddingModel}`
-      );
-
       this.vectorStore = new LangChainVectorStore(
         this.embedder,
         this.vectorStorePath,
@@ -217,7 +204,6 @@ class RAGManager {
     }
 
     await this.vectorStore.addDocuments(docs);
-    console.error("Indexing complete");
   }
 
   /**
@@ -245,6 +231,29 @@ class RAGManager {
   }
 
   /**
+   * Deduplicates search results based on content
+   * @param results - Array of document results
+   * @returns Array of deduplicated document results
+   */
+  private deduplicateResults(results: Document[]): Document[] {
+    const seen = new Set<string>();
+    const uniqueResults: Document[] = [];
+    
+    for (const result of results) {
+      // Create a unique key based on content
+      const contentKey = result.content.trim();
+      
+      // Only add if we haven't seen this content before
+      if (!seen.has(contentKey)) {
+        seen.add(contentKey);
+        uniqueResults.push(result);
+      }
+    }
+    
+    return uniqueResults;
+  }
+
+  /**
    * Queries the vector store for documents relevant to the query
    * @param query - Search query
    * @param k - Number of results to return (default: 15)
@@ -253,21 +262,14 @@ class RAGManager {
    */
   async queryDocuments(query: string, k = 15): Promise<string> {
     if (!this.vectorStore) {
-      // Try to initialize the vector store from disk
       try {
-        // Determine embedding dimension based on model
-        let embeddingDimension = 1536; // Default for OpenAI models
-
+        let embeddingDimension = 1536;
         if (
           this.embeddingModel.includes("granite-embedding") ||
           this.embeddingModel.includes("nomic-embed-text")
         ) {
-          embeddingDimension = 768; // Granite and some Nomic models use 768 dimensions
+          embeddingDimension = 768;
         }
-
-        console.error(
-          `Using embedding dimension: ${embeddingDimension} for model: ${this.embeddingModel}`
-        );
 
         this.vectorStore = new LangChainVectorStore(
           this.embedder,
@@ -276,7 +278,6 @@ class RAGManager {
         );
         await this.vectorStore.initialize();
 
-        // Check if the vector store is empty by attempting a search
         if (this.vectorStore) {
           const testResults = await this.vectorStore.similaritySearch(
             "test",
@@ -293,20 +294,22 @@ class RAGManager {
       }
     }
 
-    console.error(`Searching for documents relevant to: "${query}"`);
     if (!this.vectorStore) {
       throw new Error("Vector store not initialized");
     }
+    
     const results = await this.vectorStore.similaritySearch(query, k);
-    console.error(`Found ${results.length} relevant document chunks`);
+    const uniqueResults = this.deduplicateResults(results);
 
-    // Format the relevant chunks
-    const contextText = results
-      .map((res: Document) => `- From ${res.metadata.source}:\n${res.content}`)
-      .join("\n\n");
+    // Format for LLM consumption
+    const llmFormattedResults = uniqueResults.map((res) => {
+      const docName = res.metadata.source.replace(/\.md$/, '').replace(/\s+/g, '_');
+      return `[DOCUMENT:${docName}]
+${res.content.trim()}
+[/DOCUMENT:${docName}]`;
+    });
 
-    // Generate answer using LLM
-    return contextText;
+    return llmFormattedResults.join("\n\n");
   }
 
   /**
@@ -319,9 +322,7 @@ class RAGManager {
       throw new Error("Vector store not initialized");
     }
 
-    console.error(`Removing document: ${path}`);
     await this.vectorStore.removeDocument(path);
-    console.error(`Document removed: ${path}`);
   }
 
   /**
@@ -333,9 +334,7 @@ class RAGManager {
       throw new Error("Vector store not initialized");
     }
 
-    console.error("Removing all documents from the vector store");
     await this.vectorStore.removeAllDocuments();
-    console.error("All documents removed");
   }
 
   /**
@@ -357,10 +356,6 @@ class RAGManager {
           embeddingDimension = 768; // Granite and some Nomic models use 768 dimensions
         }
 
-        console.error(
-          `Using embedding dimension: ${embeddingDimension} for model: ${this.embeddingModel}`
-        );
-
         this.vectorStore = new LangChainVectorStore(
           this.embedder,
           this.vectorStorePath,
@@ -374,9 +369,7 @@ class RAGManager {
       }
     }
 
-    console.error("Listing all document paths in the vector store");
     const paths = await this.vectorStore.listDocumentPaths();
-    console.error(`Found ${paths.length} documents in the vector store`);
     return paths;
   }
 }
