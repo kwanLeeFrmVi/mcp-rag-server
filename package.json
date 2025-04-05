@@ -1,6 +1,6 @@
 {
   "name": "mcp-rag-server",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "MCP server for enabling RAG",
   "license": "MIT",
   "author": "Quan Le (Kwan96)",
@@ -27,7 +27,6 @@
     "@typescript-eslint/eslint-plugin": "^8.29.0",
     "@typescript-eslint/parser": "^8.29.0",
     "eslint": "^9.23.0",
-    "openai": "^4.91.0",
     "shx": "^0.4.0",
     "typescript-eslint": "^8.29.0"
   },

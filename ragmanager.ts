@@ -216,15 +216,52 @@ class RAGManager {
   private chunkText(
     text: string,
     chunkSize: number = this.chunkSize,
-    overlap: number = 100
+    overlap: number = 50
   ): string[] {
     const chunks: string[] = [];
-    let i = 0;
 
+    // Analyze content structure to determine optimal chunking
+    const isCode = text.includes("{") && text.includes("}");
+    const isMarkdown = text.includes("# ") || text.includes("## ");
+
+    // Adjust chunk size based on content type. Average of 300 and 500
+    const dynamicChunkSize = isCode
+      ? (300 + chunkSize) / 2
+      : isMarkdown
+      ? (500 + chunkSize) / 2
+      : chunkSize;
+
+    // Split by natural boundaries if possible
+    if (isCode) {
+      // Try to split at function boundaries for code
+      const functionMatches = text.matchAll(/function\s+\w+\([^)]*\)\s*{/g);
+      let lastEnd = 0;
+
+      for (const match of functionMatches) {
+        if (match.index !== undefined && match.index > lastEnd) {
+          chunks.push(text.slice(lastEnd, match.index));
+          lastEnd = match.index;
+        }
+      }
+
+      if (lastEnd < text.length) {
+        chunks.push(text.slice(lastEnd));
+      }
+
+      return chunks.filter((chunk) => chunk.trim().length > 0);
+    } else if (isMarkdown) {
+      // Split markdown at heading boundaries
+      return text
+        .split(/\n(?=#+\s)/)
+        .filter((chunk) => chunk.trim().length > 0);
+    }
+
+    // Fallback to sliding window chunking
+    let i = 0;
     while (i < text.length) {
-      const chunk = text.slice(i, i + chunkSize);
+      const chunk = text.slice(i, i + dynamicChunkSize);
       chunks.push(chunk);
-      i += chunkSize - overlap;
+      i += dynamicChunkSize - overlap;
     }
 
     return chunks;
@@ -238,18 +275,18 @@ class RAGManager {
   private deduplicateResults(results: Document[]): Document[] {
     const seen = new Set<string>();
     const uniqueResults: Document[] = [];
-    
+
     for (const result of results) {
       // Create a unique key based on content
       const contentKey = result.content.trim();
-      
+
       // Only add if we haven't seen this content before
       if (!seen.has(contentKey)) {
         seen.add(contentKey);
         uniqueResults.push(result);
       }
     }
-    
+
     return uniqueResults;
   }
 
@@ -297,13 +334,15 @@ class RAGManager {
     if (!this.vectorStore) {
       throw new Error("Vector store not initialized");
     }
-    
+
     const results = await this.vectorStore.similaritySearch(query, k);
     const uniqueResults = this.deduplicateResults(results);
 
     // Format for LLM consumption
     const llmFormattedResults = uniqueResults.map((res) => {
-      const docName = res.metadata.source.replace(/\.md$/, '').replace(/\s+/g, '_');
+      const docName = res.metadata.source
+        .replace(/\.md$/, "")
+        .replace(/\s+/g, "_");
       return `[DOCUMENT:${docName}]
 ${res.content.trim()}
 [/DOCUMENT:${docName}]`;
