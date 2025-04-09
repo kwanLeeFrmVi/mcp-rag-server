@@ -16,10 +16,19 @@ class RAGManager {
   private embeddingModel: string;
   private vectorStorePath: string;
   private chunkSize: number;
-  private embeddingProgress: Map<string, { chunk: number; status: string }[]> =
-    new Map();
   // Queue for managing concurrent embedding requests
   private embeddingQueue: Promise<unknown> = Promise.resolve();
+  private runningStatus: {
+    currentPath?: string | undefined;
+    completed: number;
+    failed: number;
+    total: number;
+  } = {
+    currentPath: undefined,
+    completed: 0,
+    failed: 0,
+    total: 0,
+  };
 
   /**
    * Creates a new RAGManager instance.
@@ -121,6 +130,7 @@ class RAGManager {
               });
 
               if (!response.ok) {
+                this.runningStatus.failed++;
                 const errorData = await response.text();
                 throw new Error(
                   `Embedding API error (${response.status}): ${errorData}`
@@ -136,12 +146,15 @@ class RAGManager {
                 data.data[0]?.embedding
               ) {
                 const embedding = data.data[0].embedding;
+                this.runningStatus.completed++;
                 resolve(embedding);
                 return embedding; // Return for the next task in queue
               } else if (data.embedding) {
+                this.runningStatus.completed++;
                 resolve(data.embedding);
                 return data.embedding; // Return for the next task in queue
               } else {
+                this.runningStatus.failed++;
                 throw new Error("No embedding found in response");
               }
             } catch (error) {
@@ -250,13 +263,6 @@ class RAGManager {
 
     // Split content into chunks
     const chunks = this.chunkText(content, this.chunkSize, 200);
-    
-    // Initialize progress tracking for this file
-    const chunkStatusArray = chunks.map((_, chunkIndex) => ({
-      chunk: chunkIndex,
-      status: "pending"
-    }));
-    this.embeddingProgress.set(filePath, chunkStatusArray);
 
     chunks.forEach((chunk, index) => {
       docs.push({
@@ -318,6 +324,13 @@ class RAGManager {
    * Supported file types: .json, .jsonl, .txt, .md, .csv
    */
   async indexDocuments(docPath: string): Promise<void> {
+    this.runningStatus = {
+      currentPath: docPath,
+      completed: 0,
+      failed: 0,
+      total: 0,
+    };
+
     const docs: Document[] = [];
 
     try {
@@ -379,64 +392,10 @@ class RAGManager {
       await (this.langChainvectorStore as LangChainVectorStore).initialize();
     }
 
-    // Create a wrapper function to track embedding progress
-    const originalEmbedder = this.embedder;
-    
-    // Temporary override of embedder to track progress
-    this.embedder = async (text: string): Promise<number[]> => {
-      // Find which document this text belongs to by matching content
-      const matchingDoc = docs.find(doc => doc.content === text);
-      
-      // Only track if we can identify which chunk this is
-      if (matchingDoc?.metadata?.chunkIndex !== undefined) {
-        const { path } = matchingDoc;
-        const chunkIndex = matchingDoc.metadata.chunkIndex as number;
-        
-        // Update status to 'processing' before embedding
-        const progressArray = this.embeddingProgress.get(path);
-        if (progressArray?.[chunkIndex]) {
-          progressArray[chunkIndex].status = 'processing';
-        }
-      }
-      
-      try {
-        // Call the original embedder
-        const result = await originalEmbedder(text);
-        
-        // After successful embedding, update status to 'completed'
-        if (matchingDoc?.metadata?.chunkIndex !== undefined) {
-          const { path } = matchingDoc;
-          const chunkIndex = matchingDoc.metadata.chunkIndex as number;
-          
-          const progressArray = this.embeddingProgress.get(path);
-          if (progressArray?.[chunkIndex]) {
-            progressArray[chunkIndex].status = 'completed';
-          }
-        }
-        
-        return result;
-      } catch (error) {
-        // In case of error, mark as 'failed' if we can identify the chunk
-        if (matchingDoc?.metadata?.chunkIndex !== undefined) {
-          const { path } = matchingDoc;
-          const chunkIndex = matchingDoc.metadata.chunkIndex as number;
-          
-          const progressArray = this.embeddingProgress.get(path);
-          if (progressArray?.[chunkIndex]) {
-            progressArray[chunkIndex].status = 'failed';
-          }
-        }
-        throw error; // Re-throw to be handled by caller
-      }
-    };
-    
-    try {
-      // Add the documents to the vector store
-      await this.langChainvectorStore.addDocuments(docs);
-    } finally {
-      // Always restore the original embedder function, even if there's an error
-      this.embedder = originalEmbedder;
-    }
+    this.runningStatus.total = docs.length;
+
+    // Add the documents to the vector store
+    await this.langChainvectorStore.addDocuments(docs);
   }
 
   /**
@@ -692,50 +651,10 @@ ${res.content.trim()}
   indexStatus(): {
     currentPath?: string;
     completed: number;
+    failed: number;
     total: number;
-    progress: Array<{path: string; status: string; chunks: number; failed?: number}>;
   } {
-    const status: {
-      currentPath?: string;
-      completed: number;
-      total: number;
-      progress: Array<{path: string; status: string; chunks: number; failed?: number}>;
-    } = {
-      currentPath: undefined,
-      completed: 0,
-      total: 0,
-      progress: []
-    };
-
-    // Add the current processing path if available
-    if (this.currentProcessingPath) {
-      status.currentPath = this.currentProcessingPath;
-    }
-
-    // Process each file's progress information
-    for (const [path, chunks] of this.embeddingProgress.entries()) {
-      const completed = chunks.filter(c => c.status === 'completed').length;
-      const failed = chunks.filter(c => c.status === 'failed').length;
-      
-      // Create progress entry for this file
-      const progressEntry: {path: string; status: string; chunks: number; failed?: number} = {
-        path,
-        status: completed === chunks.length ? 'completed' : 
-               failed > 0 ? 'partial' : 'in-progress',
-        chunks: chunks.length
-      };
-      
-      // Add failed count if there are any failed chunks
-      if (failed > 0) {
-        progressEntry.failed = failed;
-      }
-      
-      status.progress.push(progressEntry);
-      status.completed += completed;
-      status.total += chunks.length;
-    }
-
-    return status;
+    return this.runningStatus;
   }
 }
 

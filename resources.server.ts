@@ -92,15 +92,18 @@ export function registerResources(server: McpServer): void {
     }) as ReadResourceTemplateCallback
   );
 
-  // Get indexing status
-  server.resource("index-status", "rag://index/status", (async (uri, extra) => {
+  // Get embedding status
+  server.resource("embedding-status", "rag://embedding/status", (async (
+    uri,
+    extra
+  ) => {
     try {
       const status = await ragManager.indexStatus();
       return {
         contents: [
           {
             uri: "rag://index/status",
-            text: JSON.stringify(status),
+            text: `Current Path: ${status.currentPath}\nCompleted: ${status.completed}\nFailed: ${status.failed}\nTotal chunks: ${status.total}`,
           },
         ],
       };
