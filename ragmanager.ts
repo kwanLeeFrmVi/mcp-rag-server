@@ -23,11 +23,13 @@ class RAGManager {
     completed: number;
     failed: number;
     total: number;
+    failedReason?: string | undefined;
   } = {
     currentPath: undefined,
     completed: 0,
     failed: 0,
     total: 0,
+    failedReason: undefined,
   };
 
   /**
@@ -130,8 +132,16 @@ class RAGManager {
               });
 
               if (!response.ok) {
-                this.runningStatus.failed++;
                 const errorData = await response.text();
+                console.error(
+                  "[RAGManager] fetchEmbedding failed ~ response:",
+                  response.status,
+                  errorData,
+                  "___%___",
+                  JSON.stringify(response)
+                );
+                this.runningStatus.failed++;
+                this.runningStatus.failedReason = `Embedding API error (${errorData})`;
                 throw new Error(
                   `Embedding API error (${response.status}): ${errorData}`
                 );
@@ -155,6 +165,8 @@ class RAGManager {
                 return data.embedding; // Return for the next task in queue
               } else {
                 this.runningStatus.failed++;
+                this.runningStatus.failedReason =
+                  "No embedding found in response";
                 throw new Error("No embedding found in response");
               }
             } catch (error) {
@@ -653,6 +665,7 @@ ${res.content.trim()}
     completed: number;
     failed: number;
     total: number;
+    failedReason?: string;
   } {
     return this.runningStatus;
   }

@@ -103,7 +103,7 @@ export function registerResources(server: McpServer): void {
         contents: [
           {
             uri: "rag://index/status",
-            text: `Current Path: ${status.currentPath}\nCompleted: ${status.completed}\nFailed: ${status.failed}\nTotal chunks: ${status.total}`,
+            text: `Current Path: ${status.currentPath}\nCompleted: ${status.completed}\nFailed: ${status.failed}\nTotal chunks: ${status.total}\nFailed Reason: ${status.failedReason}`,
           },
         ],
       };

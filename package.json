@@ -17,7 +17,7 @@
     "build": "tsc && shx chmod +x dist/*.js",
     "start": "node dist/index.js",
     "prepare": "npm run build",
-    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "inspect": "BASE_LLM_API=http://localhost:11436/v1 EMBEDDING_MODEL=text-embedding-granite-embedding-278m-multilingual VECTOR_STORE_PATH=/Users/quanle96/Documents/vector_store CHUNK_SIZE=512 npx @modelcontextprotocol/inspector node dist/index.js",
     "watch": "tsc --watch"
   },
   "devDependencies": {

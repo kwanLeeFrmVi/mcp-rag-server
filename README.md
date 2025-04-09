@@ -23,6 +23,7 @@ mcp-rag-server is a Model Context Protocol (MCP) server that enables Retrieval A
 - [Available Resources](#available-resources)
 - [How RAG Works](#how-rag-works)
 - [Environment Variables](#environment-variables)
+  - [Recommended Models](#recommended-models)
   - [Default Environment Settings](#default-environment-settings)
   - [Configuration Examples](#configuration-examples)
 - [Integrating with Clients](#integrating-with-clients)
@@ -257,6 +258,11 @@ flowchart LR
 ## Environment Variables
 
 The server relies on several environment variables. These can be set at the system level or passed via your MCP client configuration.
+
+### Recommended Models
+
+- For Ollama: Use `nomic-embed-text` for stable performance
+- For LM Studio: You can use `granite-embedding-278m-multilingual`
 
 ### Default Environment Settings
 

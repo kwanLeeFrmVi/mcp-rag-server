@@ -46,7 +46,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `Running indexed documents from ${path}`,
+            text: `Running indexed documents from ${path}. user resource rag://embedding/status to see if it is completed`,
           },
         ],
       };
