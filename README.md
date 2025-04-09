@@ -2,6 +2,7 @@
 
 [![NPM Version](https://img.shields.io/npm/v/mcp-rag-server.svg)](https://www.npmjs.com/package/mcp-rag-server)
 [![License](https://img.shields.io/npm/l/mcp-rag-server.svg)](LICENSE)
+[![Node.js Version](https://img.shields.io/node/v/mcp-rag-server)](package.json)
 
 mcp-rag-server is a Model Context Protocol (MCP) server that enables Retrieval Augmented Generation (RAG) capabilities. It empowers Large Language Models (LLMs) to answer questions based on your document content by indexing and retrieving relevant information efficiently.
 
@@ -10,21 +11,62 @@ mcp-rag-server is a Model Context Protocol (MCP) server that enables Retrieval A
 ## Table of Contents
 
 - [Overview](#overview)
+- [Features](#features)
+- [Quick Start](#quick-start)
 - [MCP Server Usage](#mcp-server-usage)
   - [Basic Configuration](#basic-configuration)
   - [Advanced Configuration](#advanced-configuration)
 - [Installation](#installation)
+  - [From NPM](#from-npm)
   - [From Source](#from-source)
-- [Available RAG Tools](#available-rag-tools)
+- [Available Tools](#available-tools)
+- [Available Resources](#available-resources)
 - [How RAG Works](#how-rag-works)
 - [Environment Variables](#environment-variables)
   - [Default Environment Settings](#default-environment-settings)
-  - [Configuration Examples for Embedding Providers](#configuration-examples-for-embedding-providers)
-- [Integrating with Your Client and AI Agent](#integrating-with-your-client-and-ai-agent)
+  - [Configuration Examples](#configuration-examples)
+- [Integrating with Clients](#integrating-with-clients)
+  - [Common MCP Client Guides](#common-mcp-client-guides)
+    - [Using with Cline](#using-with-cline)
+    - [Using with Cursor](#using-with-cursor)
+    - [Using with Claude Client](#using-with-claude-client)
+    - [Using with Windsurf](#using-with-windsurf)
   - [Example Chat Conversation](#example-chat-conversation)
+- [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
+
+---
+
+## Features
+
+- Document indexing for various file formats (TXT, MD, JSON, CSV)
+- Customizable chunk sizes for document processing
+- Support for multiple embedding providers (Ollama, OpenAI, etc.)
+- Local vector store for efficient retrieval
+- MCP protocol integration for seamless AI agent usage
+
+## Quick Start
+
+1. Install the package:
+
+```bash
+npm install -g mcp-rag-server
+```
+
+2. Set required environment variables:
+
+```bash
+export BASE_LLM_API=http://localhost:11434/v1
+export EMBEDDING_MODEL=granite-embedding-278m-multilingual-Q6_K-1743674737397:latest
+```
+
+3. Start the server:
+
+```bash
+mcp-rag-server
+```
 
 ---
 
@@ -87,6 +129,12 @@ For custom settings, including environment variables:
 
 ## Installation
 
+### From NPM
+
+```bash
+npm install -g mcp-rag-server
+```
+
 ### From Source
 
 1. **Clone the Repository:**
@@ -94,6 +142,8 @@ For custom settings, including environment variables:
    ```bash
    git clone https://github.com/yourusername/mcp-rag-server.git
    cd mcp-rag-server
+
+   # Replace 'yourusername' with the actual repository owner
    ```
 
 2. **Install Dependencies:**
@@ -118,25 +168,54 @@ For custom settings, including environment variables:
 
 ---
 
-## Available RAG Tools
+## Available Tools
 
-The server provides the following operations accessible via MCP:
+This server provides the following tools via MCP protocol:
 
-- **index_documents:**  
-  Index documents from a directory or a single file.  
-  _Supported file types:_ `.txt`, `.md`, `.json`, `.jsonl`, `.csv`
+1. **embedding_documents** - Add documents from directory path or file path for RAG embedding
 
-- **query_documents:**  
-  Retrieve context by querying the indexed documents using RAG.
+   - Supported file types: .json, .jsonl, .txt, .md, .csv
+   - Parameters:
+     - `path`: Path containing documents to index
 
-- **remove_document:**  
-  Delete a specific document from the index by its path.
+2. **query_documents** - Query indexed documents using RAG
 
-- **remove_all_documents:**  
-  Clear the entire document index (_confirmation required_).
+   - Parameters:
+     - `query`: The question to search documents for
+     - `k`: Number of chunks to return (default: 15)
 
-- **list_documents:**  
-  Display all indexed document paths.
+3. **remove_document** - Remove a specific document from the index
+
+   - Parameters:
+     - `path`: Path to the document to remove
+
+4. **remove_all_documents** - Remove all documents from the index
+
+   - Parameters:
+     - `confirm`: Must be set to true for operation to proceed
+
+5. **list_documents** - List all document paths in the index
+
+---
+
+## Available Resources
+
+The server also provides these resources:
+
+1. **documents** (`rag://documents`) - Lists all document paths in the index
+
+2. **document** (`rag://document/{path}`) - Gets content of a specific document
+
+   - Parameters:
+     - `path`: Document path to retrieve
+
+3. **query-document** (`rag://query-document/{numberOfChunks}/{query}`) - Queries documents
+
+   - Parameters:
+     - `query`: Search query
+     - `numberOfChunks`: Number of chunks to return (default: 15)
+
+4. **embedding-status** (`rag://embedding/status`) - Gets current embedding status
 
 ---
 
@@ -203,7 +282,7 @@ If not explicitly set, the following defaults from the code will be used:
   The target size (in characters) for splitting documents into chunks.  
   **Default:** `500`
 
-### Configuration Examples for Embedding Providers
+### Configuration Examples
 
 #### 1. Ollama (Local)
 
@@ -262,9 +341,40 @@ If not explicitly set, the following defaults from the code will be used:
 
 > **Important:** Always refer to your provider’s documentation for precise API endpoints, model names, and authentication requirements.
 
+## Using Ollama Embedding Models
+
+1. Install [Ollama](https://ollama.com):
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+2. Pull your preferred embedding model:
+
+```bash
+ollama pull nomic-embed-text  # Recommended for general use
+# or
+ollama pull granite-embedding  # IBM's model
+```
+
+3. Configure `.env`:
+
+```bash
+BASE_LLM_API=http://localhost:11434/v1
+EMBEDDING_MODEL=nomic-embed-text  # or granite-embedding
+```
+
+4. Start the server:
+
+```bash
+ollama serve
+```
+
+The system supports both OpenAI-style and Ollama-style embedding APIs automatically.
+
 ---
 
-## Integrating with Your Client and AI Agent
+## Integrating with Clients
 
 After setting up the MCP server, integrate it with your client (or AI agent) so that it can leverage RAG operations seamlessly.
 
@@ -289,6 +399,130 @@ Ensure your client configuration includes the RAG server as shown below:
   }
 }
 ```
+
+### Common MCP Client Guides
+
+Below are configuration and usage guides for some popular MCP clients.
+
+#### Using with Cline
+
+Cline is a lightweight, command-line interface client for MCP.
+
+**Configuration:**
+
+Update your Cline configuration (typically found at `~/.cline/config.json`):
+
+```json
+{
+  "mcpServers": {
+    "rag": {
+      "command": "npx",
+      "args": ["-y", "mcp-rag-server"],
+      "env": {
+        "BASE_LLM_API": "http://localhost:11434/v1",
+        "LLM_API_KEY": "",
+        "EMBEDDING_MODEL": "granite-embedding-278m-multilingual-Q6_K-1743674737397:latest",
+        "VECTOR_STORE_PATH": "./vector_store",
+        "CHUNK_SIZE": "500"
+      }
+    }
+  }
+}
+```
+
+**Usage:**
+
+Launch Cline and execute RAG operations such as document indexing (`embedding_documents`) and queries (`query_documents`) directly from your terminal.
+
+#### Using with Cursor
+
+Cursor offers an interactive environment for MCP operations.
+
+**Configuration:**
+
+Edit the Cursor configuration file (commonly located at `~/.cursor/config.json`) to include the MCP server:
+
+```json
+{
+  "mcpServers": {
+    "rag": {
+      "command": "npx",
+      "args": ["-y", "mcp-rag-server"],
+      "env": {
+        "BASE_LLM_API": "http://localhost:11434/v1",
+        "LLM_API_KEY": "",
+        "EMBEDDING_MODEL": "granite-embedding-278m-multilingual-Q6_K-1743674737397:latest",
+        "VECTOR_STORE_PATH": "./vector_store",
+        "CHUNK_SIZE": "500"
+      }
+    }
+  }
+}
+```
+
+**Usage:**
+
+Start Cursor to interactively manage your documents and execute RAG operations within its user-friendly interface.
+
+#### Using with Claude Client
+
+Claude Client integrates RAG functionalities with Anthropic Claude's conversational interface.
+
+**Configuration:**
+
+Incorporate the following configuration snippet into your Claude client setup:
+
+```json
+{
+  "mcpServers": {
+    "rag": {
+      "command": "npx",
+      "args": ["-y", "mcp-rag-server"],
+      "env": {
+        "BASE_LLM_API": "http://localhost:11434/v1",
+        "LLM_API_KEY": "",
+        "EMBEDDING_MODEL": "granite-embedding-278m-multilingual-Q6_K-1743674737397:latest",
+        "VECTOR_STORE_PATH": "./vector_store",
+        "CHUNK_SIZE": "500"
+      }
+    }
+  }
+}
+```
+
+**Usage:**
+
+When operating within the Claude Client, invoke RAG commands—such as indexing or querying documents—during your conversation to enrich the context and generate informed responses.
+
+#### Using with Windsurf
+
+Windsurf is designed for seamless, web-based interaction with MCP servers.
+
+**Configuration:**
+
+Add the MCP server configuration to your Windsurf settings:
+
+```json
+{
+  "mcpServers": {
+    "rag": {
+      "command": "npx",
+      "args": ["-y", "mcp-rag-server"],
+      "env": {
+        "BASE_LLM_API": "http://localhost:11434/v1",
+        "LLM_API_KEY": "",
+        "EMBEDDING_MODEL": "granite-embedding-278m-multilingual-Q6_K-1743674737397:latest",
+        "VECTOR_STORE_PATH": "./vector_store",
+        "CHUNK_SIZE": "500"
+      }
+    }
+  }
+}
+```
+
+**Usage:**
+
+Launch Windsurf and access its GUI-driven RAG features. Use the interface to add documents, perform queries, and receive contextual answers powered by your MCP server.
 
 ### Example Chat Conversation
 
@@ -320,12 +554,31 @@ I found some relevant context from your documents. Based on the retrieved inform
 
 ---
 
+## Troubleshooting
+
+### Common Issues
+
+**Error: Embedding model not found**
+
+- Ensure your embedding model is properly installed/pulled
+- Verify the model name matches exactly
+
+**Error: Vector store permissions**
+
+- Check write permissions for the VECTOR_STORE_PATH directory
+- Ensure sufficient disk space is available
+
+**Performance Issues**
+
+- Reduce CHUNK_SIZE for better performance with large documents
+- Consider using a more powerful embedding model
+
 ## Development
 
 ### Prerequisites
 
-- Node.js (see `package.json` for version requirements)
-- npm
+- Node.js 18+ (v18.0.0 or higher required)
+- npm 9+ (v9.0.0 or higher recommended)
 
 ### Building
 
@@ -335,20 +588,40 @@ npm run build
 
 ### Testing
 
-_To be implemented:_
+Run unit tests:
 
 ```bash
-# npm test
+npm test
 ```
 
----
+Run integration tests (requires Ollama running locally):
+
+```bash
+npm run test:integration
+```
+
+### Linting
+
+```bash
+npm run lint
+```
 
 ## Contributing
 
-Contributions are welcome! If you wish to propose changes or add features, please:
+We welcome contributions! Please follow these guidelines:
 
-- Open an issue for discussion before submitting a pull request.
-- Follow the code style and commit guidelines provided in the repository.
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Commit your changes (`git commit -am 'Add some feature'`)
+4. Push to the branch (`git push origin feature/your-feature`)
+5. Open a Pull Request
+
+Please ensure:
+
+- Code follows existing style
+- Tests are added for new features
+- Documentation is updated
+- Commit messages follow conventional commits
 
 ---
 
