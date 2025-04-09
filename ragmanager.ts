@@ -9,13 +9,15 @@ import { Document, EmbeddingResponse } from "./types.js";
  * and interaction with the vector store.
  */
 class RAGManager {
-  private vectorStore: LangChainVectorStore | null = null;
+  private langChainvectorStore: LangChainVectorStore | null = null;
   private embedder: (text: string) => Promise<number[]>;
   private baseLlmApi: string;
   private llmApiKey: string;
   private embeddingModel: string;
   private vectorStorePath: string;
   private chunkSize: number;
+  private embeddingProgress: Map<string, { chunk: number; status: string }[]> =
+    new Map();
   // Queue for managing concurrent embedding requests
   private embeddingQueue: Promise<unknown> = Promise.resolve();
 
@@ -248,6 +250,13 @@ class RAGManager {
 
     // Split content into chunks
     const chunks = this.chunkText(content, this.chunkSize, 200);
+    
+    // Initialize progress tracking for this file
+    const chunkStatusArray = chunks.map((_, chunkIndex) => ({
+      chunk: chunkIndex,
+      status: "pending"
+    }));
+    this.embeddingProgress.set(filePath, chunkStatusArray);
 
     chunks.forEach((chunk, index) => {
       docs.push({
@@ -255,6 +264,7 @@ class RAGManager {
         content: chunk,
         metadata: {
           source: `${fileName} (chunk ${index + 1}/${chunks.length})`,
+          chunkIndex: index, // Store chunk index in metadata for tracking
         },
       });
     });
@@ -350,7 +360,7 @@ class RAGManager {
     }
 
     // Use FAISS vector store for persistent storage
-    if (!this.vectorStore) {
+    if (!this.langChainvectorStore) {
       // Determine embedding dimension based on model
       let embeddingDimension = 1536; // Default for OpenAI models
 
@@ -361,15 +371,72 @@ class RAGManager {
         embeddingDimension = 768; // Granite and some Nomic models use 768 dimensions
       }
 
-      this.vectorStore = new LangChainVectorStore(
+      this.langChainvectorStore = new LangChainVectorStore(
         this.embedder,
         this.vectorStorePath,
         embeddingDimension
       );
-      await (this.vectorStore as LangChainVectorStore).initialize();
+      await (this.langChainvectorStore as LangChainVectorStore).initialize();
     }
 
-    await this.vectorStore.addDocuments(docs);
+    // Create a wrapper function to track embedding progress
+    const originalEmbedder = this.embedder;
+    
+    // Temporary override of embedder to track progress
+    this.embedder = async (text: string): Promise<number[]> => {
+      // Find which document this text belongs to by matching content
+      const matchingDoc = docs.find(doc => doc.content === text);
+      
+      // Only track if we can identify which chunk this is
+      if (matchingDoc?.metadata?.chunkIndex !== undefined) {
+        const { path } = matchingDoc;
+        const chunkIndex = matchingDoc.metadata.chunkIndex as number;
+        
+        // Update status to 'processing' before embedding
+        const progressArray = this.embeddingProgress.get(path);
+        if (progressArray?.[chunkIndex]) {
+          progressArray[chunkIndex].status = 'processing';
+        }
+      }
+      
+      try {
+        // Call the original embedder
+        const result = await originalEmbedder(text);
+        
+        // After successful embedding, update status to 'completed'
+        if (matchingDoc?.metadata?.chunkIndex !== undefined) {
+          const { path } = matchingDoc;
+          const chunkIndex = matchingDoc.metadata.chunkIndex as number;
+          
+          const progressArray = this.embeddingProgress.get(path);
+          if (progressArray?.[chunkIndex]) {
+            progressArray[chunkIndex].status = 'completed';
+          }
+        }
+        
+        return result;
+      } catch (error) {
+        // In case of error, mark as 'failed' if we can identify the chunk
+        if (matchingDoc?.metadata?.chunkIndex !== undefined) {
+          const { path } = matchingDoc;
+          const chunkIndex = matchingDoc.metadata.chunkIndex as number;
+          
+          const progressArray = this.embeddingProgress.get(path);
+          if (progressArray?.[chunkIndex]) {
+            progressArray[chunkIndex].status = 'failed';
+          }
+        }
+        throw error; // Re-throw to be handled by caller
+      }
+    };
+    
+    try {
+      // Add the documents to the vector store
+      await this.langChainvectorStore.addDocuments(docs);
+    } finally {
+      // Always restore the original embedder function, even if there's an error
+      this.embedder = originalEmbedder;
+    }
   }
 
   /**
@@ -464,7 +531,7 @@ class RAGManager {
    * @throws Error if vector store not initialized or no documents indexed
    */
   async queryDocuments(query: string, k = 15): Promise<string> {
-    if (!this.vectorStore) {
+    if (!this.langChainvectorStore) {
       try {
         let embeddingDimension = 1536;
         if (
@@ -474,15 +541,15 @@ class RAGManager {
           embeddingDimension = 768;
         }
 
-        this.vectorStore = new LangChainVectorStore(
+        this.langChainvectorStore = new LangChainVectorStore(
           this.embedder,
           this.vectorStorePath,
           embeddingDimension
         );
-        await this.vectorStore.initialize();
+        await this.langChainvectorStore.initialize();
 
-        if (this.vectorStore) {
-          const testResults = await this.vectorStore.similaritySearch(
+        if (this.langChainvectorStore) {
+          const testResults = await this.langChainvectorStore.similaritySearch(
             "test",
             1
           );
@@ -501,11 +568,11 @@ class RAGManager {
       }
     }
 
-    if (!this.vectorStore) {
+    if (!this.langChainvectorStore) {
       throw new Error("Vector store not initialized");
     }
 
-    const results = await this.vectorStore.similaritySearch(query, k);
+    const results = await this.langChainvectorStore.similaritySearch(query, k);
     const uniqueResults = this.deduplicateResults(results);
 
     // Format for LLM consumption
@@ -527,11 +594,11 @@ ${res.content.trim()}
    * @throws Error if vector store not initialized
    */
   async removeDocument(path: string): Promise<void> {
-    if (!this.vectorStore) {
+    if (!this.langChainvectorStore) {
       throw new Error("Vector store not initialized");
     }
 
-    await this.vectorStore.removeDocument(path);
+    await this.langChainvectorStore.removeDocument(path);
   }
 
   /**
@@ -539,11 +606,11 @@ ${res.content.trim()}
    * @throws Error if vector store not initialized
    */
   async removeAllDocuments(): Promise<void> {
-    if (!this.vectorStore) {
+    if (!this.langChainvectorStore) {
       throw new Error("Vector store not initialized");
     }
 
-    await this.vectorStore.removeAllDocuments();
+    await this.langChainvectorStore.removeAllDocuments();
   }
 
   /**
@@ -552,7 +619,7 @@ ${res.content.trim()}
    * @throws Error if vector store not initialized or no documents indexed
    */
   async listDocumentPaths(): Promise<string[]> {
-    if (!this.vectorStore) {
+    if (!this.langChainvectorStore) {
       // Try to initialize the vector store from disk
       try {
         // Determine embedding dimension based on model
@@ -565,12 +632,12 @@ ${res.content.trim()}
           embeddingDimension = 768; // Granite and some Nomic models use 768 dimensions
         }
 
-        this.vectorStore = new LangChainVectorStore(
+        this.langChainvectorStore = new LangChainVectorStore(
           this.embedder,
           this.vectorStorePath,
           embeddingDimension
         );
-        await this.vectorStore.initialize();
+        await this.langChainvectorStore.initialize();
       } catch (error) {
         console.error(
           "[RAGManager] Error initializing vector store:",
@@ -582,8 +649,93 @@ ${res.content.trim()}
       }
     }
 
-    const paths = await this.vectorStore.listDocumentPaths();
+    const paths = await this.langChainvectorStore.listDocumentPaths();
     return paths;
+  }
+
+  async isIndexed(path: string | string[]): Promise<boolean> {
+    const paths = Array.isArray(path) ? path : [path];
+    const results = await Promise.all(
+      paths.map(async (p) => {
+        try {
+          const exists =
+            (await this.langChainvectorStore?.hasDocument(p)) ?? false;
+          return exists;
+        } catch (error) {
+          return false;
+        }
+      })
+    );
+    return results.every(Boolean);
+  }
+
+  async getDocument(path: string | string[]): Promise<string> {
+    const paths = Array.isArray(path) ? path : [path];
+    const contents = await Promise.all(
+      paths.map(async (p) => {
+        try {
+          const content =
+            (await this.langChainvectorStore?.getDocumentContent(p)) ?? "";
+          return content;
+        } catch (error) {
+          return "";
+        }
+      })
+    );
+    return contents.join("\n\n");
+  }
+
+  /**
+   * Get the current status of document indexing/embedding process
+   * @returns Object containing progress information including completed chunks and total chunks
+   */
+  indexStatus(): {
+    currentPath?: string;
+    completed: number;
+    total: number;
+    progress: Array<{path: string; status: string; chunks: number; failed?: number}>;
+  } {
+    const status: {
+      currentPath?: string;
+      completed: number;
+      total: number;
+      progress: Array<{path: string; status: string; chunks: number; failed?: number}>;
+    } = {
+      currentPath: undefined,
+      completed: 0,
+      total: 0,
+      progress: []
+    };
+
+    // Add the current processing path if available
+    if (this.currentProcessingPath) {
+      status.currentPath = this.currentProcessingPath;
+    }
+
+    // Process each file's progress information
+    for (const [path, chunks] of this.embeddingProgress.entries()) {
+      const completed = chunks.filter(c => c.status === 'completed').length;
+      const failed = chunks.filter(c => c.status === 'failed').length;
+      
+      // Create progress entry for this file
+      const progressEntry: {path: string; status: string; chunks: number; failed?: number} = {
+        path,
+        status: completed === chunks.length ? 'completed' : 
+               failed > 0 ? 'partial' : 'in-progress',
+        chunks: chunks.length
+      };
+      
+      // Add failed count if there are any failed chunks
+      if (failed > 0) {
+        progressEntry.failed = failed;
+      }
+      
+      status.progress.push(progressEntry);
+      status.completed += completed;
+      status.total += chunks.length;
+    }
+
+    return status;
   }
 }
 

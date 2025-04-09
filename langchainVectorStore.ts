@@ -201,6 +201,7 @@ export class LangChainVectorStore implements VectorStore {
       this.log("Error adding documents:", error);
     }
   }
+
   async addDocument(doc: Document): Promise<void> {
     if (!this.initialized) await this.initialize();
     if (!this.vectorStore) {
@@ -355,5 +356,23 @@ export class LangChainVectorStore implements VectorStore {
     }
 
     return Array.from(this.documents.keys());
+  }
+
+  async hasDocument(path: string): Promise<boolean> {
+    try {
+      const doc = await this.documents.get(path);
+      return !!doc && doc?.metadata?.path === path;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async getDocumentContent(path: string): Promise<string> {
+    try {
+      const doc = await this.documents.get(path);
+      return !!doc && doc?.metadata?.path === path ? doc?.content : "";
+    } catch (error) {
+      return "";
+    }
   }
 }
