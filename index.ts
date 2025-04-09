@@ -114,12 +114,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     switch (name) {
       case "index_documents":
         try {
-          await RagManager.indexDocuments(args.path as string);
+          RagManager.indexDocuments(args.path as string)
+            .then(() => {
+              console.error(`Successfully indexed documents from ${args.path}`);
+            })
+            .catch((error) => {
+              console.error(`Error indexing documents: ${error}`);
+            });
           return {
             content: [
               {
                 type: "text",
-                text: `Successfully indexed documents from ${args.path}`,
+                text: `Running indexed documents from ${args.path}`,
               },
             ],
           };
@@ -298,9 +304,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 });
+import fs from "fs";
 
 async function main() {
   try {
+    const origin = console.error;
+    console.error = function (...args: any[]) {
+      origin(...args);
+      const errorMessage = args.join(" ");
+      fs.appendFileSync("./rag_server.log", errorMessage + "\n");
+    };
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error("RAG MCP Server running on stdio");

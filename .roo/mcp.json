@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "testing-rag-mcp": {
+      "command": "node",
+      "args": ["./dist/index.js"],
+      "env": {
+        "BASE_LLM_API": "http://localhost:11434/v1",
+        "LLM_API_KEY": "your-rag-server-api-key",
+        "EMBEDDING_MODEL": "hf.co/bartowski/granite-embedding-278m-multilingual-GGUF:Q6_K",
+        "VECTOR_STORE_PATH": "/Users/quanle96/Documents/vector_store",
+        "CHUNK_SIZE": "512"
+      },
+      "alwaysAllow": ["query_documents", "index_documents", "list_documents"]
+    }
+  }
+}

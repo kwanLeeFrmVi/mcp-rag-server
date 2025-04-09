@@ -37,7 +37,7 @@ export class LangChainVectorStore implements VectorStore {
   private embeddings: CustomEmbeddings;
   private readonly debounceSaveIndex = debounce(() => {
     this.saveIndex().catch((err) => this.log("Error in saveIndex:", err));
-  }, 1000);
+  }, 500);
   private client: Client;
 
   constructor(
@@ -201,7 +201,40 @@ export class LangChainVectorStore implements VectorStore {
       this.log("Error adding documents:", error);
     }
   }
+  async addDocument(doc: Document): Promise<void> {
+    if (!this.initialized) await this.initialize();
+    if (!this.vectorStore) {
+      this.log("Vector store not initialized.");
+      return;
+    }
+    if (!doc) {
+      this.log("No documents provided to add.");
+      return;
+    }
 
+    try {
+      // Store the document in our map for later retrieval
+      this.documents.set(doc.path, doc);
+
+      // Convert our Document type to LangChain Document type
+      const langchainDoc = new LangChainDocument({
+        pageContent: doc.content,
+        metadata: {
+          ...doc.metadata,
+          path: doc.path,
+        },
+      });
+
+      // Add documents to the vector store
+      await this.vectorStore.addDocuments([langchainDoc]);
+      this.log(`Added 1 documents to vector store`);
+
+      // Save the index after adding documents
+      this.debounceSaveIndex();
+    } catch (error) {
+      this.log("Error adding documents:", error);
+    }
+  }
   /**
    * Searches for documents similar to the query text.
    */
@@ -320,7 +353,7 @@ export class LangChainVectorStore implements VectorStore {
     if (!this.initialized) {
       await this.initialize();
     }
-    
+
     return Array.from(this.documents.keys());
   }
 }
