@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable no-console */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -308,12 +309,17 @@ import fs from "fs";
 
 async function main() {
   try {
-    const origin = console.error;
-    console.error = function (...args: any[]) {
-      origin(...args);
-      const errorMessage = args.join(" ");
-      fs.appendFileSync("./rag_server.log", errorMessage + "\n");
-    };
+    const isDebug = process.argv.includes("--debug");
+
+    if (isDebug) {
+      const origin = console.error;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      console.error = function (...args: any[]) {
+        origin(...args);
+        const errorMessage = args.join(" ");
+        fs.appendFileSync("./rag_server.log", errorMessage + "\n");
+      };
+    }
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error("RAG MCP Server running on stdio");
